@@ -100,6 +100,20 @@ npm start
 ### iPhone（受信）
 1. 同じLANから `http://<MacのIP>:8080/receiver.html` → 「タップして開始」（音声アンロック）
 2. 音源が止まると画面が暗転＋無音になる＝着席合図
+## 技術スタック
+
+フレームワーク・ビルドツール無しの「素の Web 技術＋Node」構成。会場でオフライン動作。
+
+| 領域 | 技術 | 備考 |
+|---|---|---|
+| サーバー | **Node.js**（標準 `http`）+ **`ws`** | 依存は `ws` のみ。静的配信は自作 |
+| 音声解析 | **Web Audio API**（`AnalyserNode`）+ `getUserMedia` | ライブラリ不要 |
+| 通信 | **WebSocket**（LAN内 `ws://`） | 状態変化を即時配信＋500ms心拍 |
+| フロント | **素の HTML/CSS/JS**（ES Modules、ビルド無し） | |
+| 描画 | **Canvas API** | スペクトラム表示 |
+| 音声合図 | **Web Audio**（`OscillatorNode`/`GainNode`） | 440Hz持続音のゲート（方式B） |
+| 永続化 | **localStorage** | 閾値・帯域・受信設定を保存 |
+| 音源解析(開発) | Python + `numpy` + `soundfile` | `scripts/analyze.py` |
 
 ### スリープ対策（重要）
 `npm start` だけでは Mac はスリープし得る。検知が凍ると受信側は「鳴っている」のまま固まる（無言の故障）。
@@ -159,6 +173,10 @@ public/
 scripts/analyze.py           音源解析（帯域エネルギー・無音区間）
 .docs/spec.md                仕様書（設計根拠・実測データ）
 ```
+### 検証（音源なしでの簡易確認）
+
+Mac のスペクトラム表示に高周波（口笛・鍵束を擦る音など 16kHz 付近）が乗るか、
+閾値をまたいだ時に受信ページが点滅・音を出すかを確認する。
 
 ---
 
