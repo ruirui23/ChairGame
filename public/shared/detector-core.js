@@ -3,12 +3,15 @@
 
 export const DEFAULTS = Object.freeze({
   lowHz: 16000,
-  highHz: 18200,
+  highHz: 18500,
   threshold: -70,      // dB。停止判定の下側の境界（キャリブレーション前の暫定値）
   hysteresisDb: 6,     // ヒステリシス幅。鳴り出すには threshold+この値 が必要。境界付近の点滅を防ぐ
   holdStopMs: 60,      // 停止判定の保持時間（デバウンス）
   holdStartMs: 30,     // 再開判定の保持時間
+  smoothMs: 0,         // レベル平滑化の時定数(ms)。0=無効。遠距離で弱く途切れる時に80等（停止検知は少し遅くなる）
 });
+
+const SILENCE_DB = -140;   // 平滑化用に -Infinity を置き換える下限
 
 export class DetectorEngine {
   /**
@@ -23,9 +26,11 @@ export class DetectorEngine {
     this.buffer = new Float32Array(analyser.frequencyBinCount);
 
     this.playing = true;        // 初期は「鳴っている」扱い（頭の無音で誤トリガーしないため）
-    this.level = -Infinity;     // 直近の帯域レベル (dB)
+    this.level = -Infinity;     // 直近の帯域レベル (dB, 生値・表示用)
+    this.detLevel = SILENCE_DB; // 判定に使うレベル（smoothMs>0 で平滑化）
     this._silenceStart = null;  // 閾値割れが始まった時刻
     this._loudStart = null;     // 閾値超えが始まった時刻
+    this._lastNow = null;
     this._recomputeBins();
   }
 
@@ -61,6 +66,18 @@ export class DetectorEngine {
     this.measureLevel();
     let changed = false;
 
+    // 判定レベル：smoothMs>0 なら指数移動平均で平滑化（弱い信号の途切れを防ぐ）。
+    const raw = Number.isFinite(this.level) ? this.level : SILENCE_DB;
+    if (this.cfg.smoothMs > 0) {
+      const dt = this._lastNow === null ? 0 : now - this._lastNow;
+      const alpha = 1 - Math.exp(-dt / this.cfg.smoothMs);
+      this.detLevel += alpha * (raw - this.detLevel);
+    } else {
+      this.detLevel = raw;
+    }
+    this._lastNow = now;
+    const L = this.detLevel;
+
     // ヒステリシス：鳴り出すのは高い閾値、止めるのは低い閾値。
     // 間のデッドバンドでは状態を変えず、境界付近の点滅を防ぐ。
     const startTh = this.cfg.threshold + this.cfg.hysteresisDb;
@@ -69,7 +86,7 @@ export class DetectorEngine {
     if (this.playing) {
       // 再生中：stopTh を下回る状態が holdStopMs 続いたら停止
       this._loudStart = null;
-      if (this.level < stopTh) {
+      if (L < stopTh) {
         if (this._silenceStart === null) this._silenceStart = now;
         if (now - this._silenceStart >= this.cfg.holdStopMs) {
           this.playing = false;
@@ -81,7 +98,7 @@ export class DetectorEngine {
     } else {
       // 停止中：startTh 以上が holdStartMs 続いたら再生
       this._silenceStart = null;
-      if (this.level >= startTh) {
+      if (L >= startTh) {
         if (this._loudStart === null) this._loudStart = now;
         if (now - this._loudStart >= this.cfg.holdStartMs) {
           this.playing = true;

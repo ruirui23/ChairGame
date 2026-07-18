@@ -31,15 +31,19 @@
 
     <div class="panel">
       <div class="row"><label>監視帯域 下限 (Hz)</label><input type="number" id="lowHz" value="16000" step="100">
-        <button class="secondary" id="presetStd">標準 16k</button>
-        <button class="secondary" id="presetVoice">声除外 17k</button></div>
-      <div class="row"><label>監視帯域 上限 (Hz)</label><input type="number" id="highHz" value="18200" step="100"></div>
+        <button class="secondary" id="presetStd">標準 16-18.5k</button>
+        <button class="secondary" id="presetVoice">声除外 17k</button>
+        <button class="secondary" id="presetFar">遠距離 16-17.5k</button></div>
+      <div class="row"><label>監視帯域 上限 (Hz)</label><input type="number" id="highHz" value="18500" step="100">
+        <span class="hint">実測では音源は約18.2kで途切れる。18.5k程度が上限の目安。会場でスペクトラムに山が出る範囲に留めるのが安定</span></div>
       <div class="row"><label>閾値 (dB)</label><input type="number" id="threshold" value="-70" step="1">
         <button class="secondary" id="setFromNow">現在値−25dBに設定</button></div>
       <div class="row"><label>ヒステリシス (dB)</label><input type="number" id="hysteresis" value="6" step="1">
         <span class="hint">点滅防止。鳴り出すには 閾値+この値 が必要</span></div>
       <div class="row"><label>停止保持 (ms)</label><input type="number" id="holdStop" value="60" step="10"></div>
       <div class="row"><label>再開保持 (ms)</label><input type="number" id="holdStart" value="30" step="10"></div>
+      <div class="row"><label>平滑化 (ms)</label><input type="number" id="smooth" value="0" step="10">
+        <span class="hint">遠距離で途切れる時に 80 等。0=無効（停止検知が少し遅くなる）</span></div>
       <div class="hint">設定は自動保存されます。当日の会場で「現在値−25dBに設定」を音源再生中に押すと手早く合わせられます。</div>
     </div>
 

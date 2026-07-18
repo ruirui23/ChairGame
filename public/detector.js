@@ -8,11 +8,11 @@ const ui = {
   startBtn: el('startBtn'), state: el('state'), clients: el('clients'),
   level: el('level'), levelBar: el('levelBar'),
   lowHz: el('lowHz'), highHz: el('highHz'), threshold: el('threshold'),
-  hysteresis: el('hysteresis'),
+  hysteresis: el('hysteresis'), smooth: el('smooth'),
   holdStop: el('holdStop'), holdStart: el('holdStart'),
   setFromNow: el('setFromNow'), spectrum: el('spectrum'), recvUrl: el('recvUrl'),
   peak: el('peak'), clipWarn: el('clipWarn'),
-  presetStd: el('presetStd'), presetVoice: el('presetVoice'),
+  presetStd: el('presetStd'), presetVoice: el('presetVoice'), presetFar: el('presetFar'),
   calNoise: el('calNoise'), calMusic: el('calMusic'), calApply: el('calApply'),
   calStatus: el('calStatus'), noiseOut: el('noiseOut'), musicOut: el('musicOut'),
   noiseMargin: el('noiseMargin'),
@@ -34,6 +34,7 @@ function loadCfg() {
     if (saved.highHz != null) ui.highHz.value = saved.highHz;
     if (saved.threshold != null) ui.threshold.value = saved.threshold;
     if (saved.hysteresisDb != null) ui.hysteresis.value = saved.hysteresisDb;
+    if (saved.smoothMs != null) ui.smooth.value = saved.smoothMs;
     if (saved.holdStopMs != null) ui.holdStop.value = saved.holdStopMs;
     if (saved.holdStartMs != null) ui.holdStart.value = saved.holdStartMs;
   } catch { /* ignore */ }
@@ -42,6 +43,7 @@ function currentCfg() {
   return {
     lowHz: +ui.lowHz.value, highHz: +ui.highHz.value,
     threshold: +ui.threshold.value, hysteresisDb: +ui.hysteresis.value,
+    smoothMs: +ui.smooth.value,
     holdStopMs: +ui.holdStop.value, holdStartMs: +ui.holdStart.value,
   };
 }
@@ -51,7 +53,7 @@ function applyCfg() {
   if (engine) engine.setConfig(currentCfg());
   saveCfg();
 }
-for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.hysteresis, ui.holdStop, ui.holdStart]) {
+for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.hysteresis, ui.smooth, ui.holdStop, ui.holdStart]) {
   inp.addEventListener('change', applyCfg);
 }
 loadCfg();
@@ -101,9 +103,11 @@ ui.startBtn.addEventListener('click', async () => {
   }
 });
 
-// 帯域プリセット
-ui.presetStd.addEventListener('click', () => { ui.lowHz.value = 16000; applyCfg(); });
-ui.presetVoice.addEventListener('click', () => { ui.lowHz.value = 17000; applyCfg(); });
+// 帯域プリセット（下限・上限をまとめて設定）
+function setBand(low, high) { ui.lowHz.value = low; ui.highHz.value = high; applyCfg(); }
+ui.presetStd.addEventListener('click', () => setBand(16000, 18500));   // 標準
+ui.presetVoice.addEventListener('click', () => setBand(17000, 18500)); // 声除外
+ui.presetFar.addEventListener('click', () => setBand(16000, 17500));   // 遠距離：最もよく届く帯域に絞る
 
 ui.setFromNow.addEventListener('click', () => {
   if (!engine) return;
