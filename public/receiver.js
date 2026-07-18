@@ -1,11 +1,12 @@
 // 受信ページ：WS の playing 状態を受けて画面点滅＋音声合図（方式B：一定音ゲート）。
+// 既定の合図方向：高周波が鳴っている間＝チカチカ＋持続音／止まったら＝暗転＋無音。
 const el = (id) => document.getElementById(id);
 const signal = el('signal');
 const overlay = el('startOverlay');
 const warning = el('warning');
 const dbg = el('debug');
 
-const FLASH_HZ = 10;               // 停止時の点滅周波数
+const FLASH_HZ = 10;               // 点滅周波数
 const DISCONNECT_MS = 1500;        // 心拍がこの時間途切れたら「未接続」警告
 
 let started = false;
@@ -14,12 +15,16 @@ let lastMsgAt = 0;
 
 // 設定（localStorage 永続化）
 const prefs = {
-  screen: true, sound: true, invert: false, debug: false,
+  screen: true, sound: true, debug: false,
+  flashWhilePlaying: true,         // true: 鳴っている間チカチカ / false: 止まったらチカチカ（旧方式）
   ...JSON.parse(localStorage.getItem('chairgame.receiver') || '{}'),
 };
 function savePrefs() { localStorage.setItem('chairgame.receiver', JSON.stringify(prefs)); }
 
-// ===== 音声（方式B）=====
+// 合図を出すべき状態か（true のとき チカチカ＋音）
+function activeNow() { return prefs.flashWhilePlaying ? playing : !playing; }
+
+// ===== 音声（方式B：持続音ゲート）=====
 let audioCtx = null, sustainOsc = null, sustainGain = null;
 function initAudio() {
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -28,7 +33,7 @@ function initAudio() {
   sustainGain.connect(audioCtx.destination);
   sustainOsc = audioCtx.createOscillator();
   sustainOsc.type = 'sine';
-  sustainOsc.frequency.value = 440;   // 鳴っている間の持続音
+  sustainOsc.frequency.value = 440;   // 合図が出ている間の持続音
   sustainOsc.connect(sustainGain);
   sustainOsc.start();
 }
@@ -38,32 +43,16 @@ function setSustain(on) {
   g.cancelScheduledValues(audioCtx.currentTime);
   g.linearRampToValueAtTime(on && prefs.sound ? 0.06 : 0, audioCtx.currentTime + 0.02);
 }
-function blipStop() {
-  if (!audioCtx || !prefs.sound) return;
-  const t = audioCtx.currentTime;
-  const osc = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  osc.type = 'square';
-  osc.frequency.value = 880;          // 止まった瞬間の一発（音色を変える）
-  g.gain.setValueAtTime(0.25, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-  osc.connect(g); g.connect(audioCtx.destination);
-  osc.start(t); osc.stop(t + 0.09);
-}
 
 // ===== 画面点滅 =====
 let flashOn = false;
 setInterval(() => {
   if (!started) return;
-  if (playing) {
-    // 鳴っている間：真っ黒（反転時は真っ白）
-    signal.style.background = prefs.invert ? '#fff' : '#000';
-  } else if (prefs.screen) {
-    // 止まった：白黒点滅
+  if (activeNow() && prefs.screen) {
     flashOn = !flashOn;
-    signal.style.background = flashOn ? '#fff' : '#000';
+    signal.style.background = flashOn ? '#fff' : '#000';   // チカチカ
   } else {
-    signal.style.background = '#000';
+    signal.style.background = '#000';                       // 暗転
   }
 }, 1000 / (FLASH_HZ * 2));
 
@@ -71,12 +60,7 @@ setInterval(() => {
 function applyState(nextPlaying) {
   if (nextPlaying === playing) return;
   playing = nextPlaying;
-  if (playing) {
-    setSustain(true);
-  } else {
-    setSustain(false);
-    blipStop();
-  }
+  setSustain(activeNow());   // 合図中だけ音、外れたら無音
 }
 
 // ===== WebSocket =====
@@ -136,11 +120,11 @@ overlay.addEventListener('touchend', (e) => { e.preventDefault(); start(); });
 function applyControls() {
   el('toggleScreen').textContent = prefs.screen ? '画面ON' : '画面OFF';
   el('toggleSound').textContent = prefs.sound ? '音ON' : '音OFF';
-  el('toggleInvert').textContent = prefs.invert ? '反転ON' : '反転OFF';
+  el('toggleMode').textContent = prefs.flashWhilePlaying ? '合図:鳴音中' : '合図:停止時';
   dbg.style.display = prefs.debug ? 'flex' : 'none';
-  setSustain(playing);
+  setSustain(activeNow());
 }
 el('toggleScreen').addEventListener('click', () => { prefs.screen = !prefs.screen; savePrefs(); applyControls(); });
 el('toggleSound').addEventListener('click', () => { prefs.sound = !prefs.sound; savePrefs(); applyControls(); });
-el('toggleInvert').addEventListener('click', () => { prefs.invert = !prefs.invert; savePrefs(); applyControls(); });
+el('toggleMode').addEventListener('click', () => { prefs.flashWhilePlaying = !prefs.flashWhilePlaying; savePrefs(); applyControls(); });
 el('toggleDebug').addEventListener('click', () => { prefs.debug = !prefs.debug; savePrefs(); applyControls(); });

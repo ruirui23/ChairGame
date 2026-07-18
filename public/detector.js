@@ -1,6 +1,6 @@
 import { DetectorEngine, DEFAULTS } from '/shared/detector-core.js';
 
-const FFT_SIZE = 4096;
+const FFT_SIZE = 2048;  // 窓43ms(48kHz)。分解能23Hzで帯域には十分、反応を速くするため4096から短縮
 const STORAGE_KEY = 'chairgame.detector.cfg';
 
 const el = (id) => document.getElementById(id);
@@ -8,8 +8,14 @@ const ui = {
   startBtn: el('startBtn'), state: el('state'), clients: el('clients'),
   level: el('level'), levelBar: el('levelBar'),
   lowHz: el('lowHz'), highHz: el('highHz'), threshold: el('threshold'),
+  hysteresis: el('hysteresis'),
   holdStop: el('holdStop'), holdStart: el('holdStart'),
   setFromNow: el('setFromNow'), spectrum: el('spectrum'), recvUrl: el('recvUrl'),
+  peak: el('peak'), clipWarn: el('clipWarn'),
+  presetStd: el('presetStd'), presetVoice: el('presetVoice'),
+  calNoise: el('calNoise'), calMusic: el('calMusic'), calApply: el('calApply'),
+  calStatus: el('calStatus'), noiseOut: el('noiseOut'), musicOut: el('musicOut'),
+  noiseMargin: el('noiseMargin'),
 };
 
 let engine = null;
@@ -27,6 +33,7 @@ function loadCfg() {
     if (saved.lowHz != null) ui.lowHz.value = saved.lowHz;
     if (saved.highHz != null) ui.highHz.value = saved.highHz;
     if (saved.threshold != null) ui.threshold.value = saved.threshold;
+    if (saved.hysteresisDb != null) ui.hysteresis.value = saved.hysteresisDb;
     if (saved.holdStopMs != null) ui.holdStop.value = saved.holdStopMs;
     if (saved.holdStartMs != null) ui.holdStart.value = saved.holdStartMs;
   } catch { /* ignore */ }
@@ -34,7 +41,7 @@ function loadCfg() {
 function currentCfg() {
   return {
     lowHz: +ui.lowHz.value, highHz: +ui.highHz.value,
-    threshold: +ui.threshold.value,
+    threshold: +ui.threshold.value, hysteresisDb: +ui.hysteresis.value,
     holdStopMs: +ui.holdStop.value, holdStartMs: +ui.holdStart.value,
   };
 }
@@ -44,7 +51,7 @@ function applyCfg() {
   if (engine) engine.setConfig(currentCfg());
   saveCfg();
 }
-for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.holdStop, ui.holdStart]) {
+for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.hysteresis, ui.holdStop, ui.holdStart]) {
   inp.addEventListener('change', applyCfg);
 }
 loadCfg();
@@ -94,6 +101,10 @@ ui.startBtn.addEventListener('click', async () => {
   }
 });
 
+// 帯域プリセット
+ui.presetStd.addEventListener('click', () => { ui.lowHz.value = 16000; applyCfg(); });
+ui.presetVoice.addEventListener('click', () => { ui.lowHz.value = 17000; applyCfg(); });
+
 ui.setFromNow.addEventListener('click', () => {
   if (!engine) return;
   const lv = engine.measureLevel();
@@ -103,11 +114,78 @@ ui.setFromNow.addEventListener('click', () => {
   }
 });
 
+// --- キャリブレーション（雑音対策）---
+const CAL_KEY = 'chairgame.detector.cal';
+const cal = { noiseFloor: null, musicLevel: null, ...JSON.parse(localStorage.getItem(CAL_KEY) || '{}') };
+let collecting = null; // { samples: [], done: (arr)=>void }
+
+function renderCal() {
+  ui.noiseOut.textContent = 'ノイズフロア: ' + (cal.noiseFloor != null ? cal.noiseFloor.toFixed(1) + ' dB' : '—');
+  ui.musicOut.textContent = '音源レベル: ' + (cal.musicLevel != null ? cal.musicLevel.toFixed(1) + ' dB' : '—');
+  ui.calApply.disabled = !(cal.noiseFloor != null && cal.musicLevel != null);
+}
+renderCal();
+
+function percentile(arr, p) {
+  const s = arr.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!s.length) return null;
+  return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))];
+}
+
+function collect(ms, done) {
+  if (!engine) { alert('先に「マイク開始」を押してください'); return; }
+  collecting = { samples: [], done };
+  const btns = [ui.calNoise, ui.calMusic];
+  btns.forEach((b) => (b.disabled = true));
+  const t0 = performance.now();
+  ui.calStatus.textContent = '測定中…';
+  const timer = setInterval(() => {
+    const remain = Math.max(0, ms - (performance.now() - t0));
+    ui.calStatus.textContent = `測定中… ${(remain / 1000).toFixed(1)}s`;
+    if (remain <= 0) {
+      clearInterval(timer);
+      const samples = collecting.samples;
+      collecting = null;
+      btns.forEach((b) => (b.disabled = false));
+      ui.calStatus.textContent = '';
+      done(samples);
+    }
+  }, 100);
+}
+
+ui.calNoise.addEventListener('click', () => collect(3000, (s) => {
+  cal.noiseFloor = percentile(s, 95); // 定常ノイズがたまに達する上端
+  localStorage.setItem(CAL_KEY, JSON.stringify(cal));
+  renderCal();
+}));
+ui.calMusic.addEventListener('click', () => collect(5000, (s) => {
+  cal.musicLevel = percentile(s, 50); // 音源レベルの中央値
+  localStorage.setItem(CAL_KEY, JSON.stringify(cal));
+  renderCal();
+}));
+ui.calApply.addEventListener('click', () => {
+  if (cal.noiseFloor == null || cal.musicLevel == null) return;
+  const margin = +ui.noiseMargin.value || 8;
+  const floorGuard = cal.noiseFloor + margin;   // ノイズより十分上
+  const musicGuard = cal.musicLevel - 3;        // 音源より少し下
+  let th = cal.musicLevel - 25;                 // 基本は音源中央値−25dB
+  th = Math.min(Math.max(th, floorGuard), musicGuard);
+  ui.threshold.value = Math.round(th);
+  applyCfg();
+  if (floorGuard >= musicGuard) {
+    ui.calStatus.textContent = '⚠️ ノイズと音源の差が小さく誤検知の恐れ（音量↑や設置見直しを）';
+  } else {
+    ui.calStatus.textContent = `✓ 閾値 ${Math.round(th)}dB（SNR 約 ${(cal.musicLevel - cal.noiseFloor).toFixed(0)}dB）`;
+  }
+});
+
 // --- メインループ ---
 const specCtx = ui.spectrum.getContext('2d');
+let timeBuf = null;
 function loop(now) {
   const changed = engine.tick(now);
   if (changed) broadcastState();
+  if (collecting) collecting.samples.push(engine.level);
 
   // 表示更新
   const lv = engine.level;
@@ -116,6 +194,15 @@ function loop(now) {
   ui.levelBar.style.width = pct + '%';
   ui.state.className = 'state-badge ' + (engine.playing ? 'playing' : 'stopped');
   ui.state.textContent = engine.playing ? '鳴っている' : '停止';
+
+  // 入力ピーク／クリップ検知（時間波形の絶対最大値）
+  if (!timeBuf) timeBuf = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(timeBuf);
+  let peak = 0;
+  for (let i = 0; i < timeBuf.length; i++) { const a = Math.abs(timeBuf[i]); if (a > peak) peak = a; }
+  const peakDb = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+  ui.peak.textContent = Number.isFinite(peakDb) ? `${peakDb.toFixed(1)} dBFS` : '−∞';
+  ui.clipWarn.style.display = peak >= 0.985 ? 'inline-block' : 'none';
 
   drawSpectrum();
   requestAnimationFrame(loop);
@@ -142,8 +229,12 @@ function drawSpectrum() {
     const x = ((hz / binWidth - fromBin) / (toBin - fromBin)) * W;
     specCtx.beginPath(); specCtx.moveTo(x, 0); specCtx.lineTo(x, H); specCtx.stroke();
   }
-  // 閾値の横線
-  const ty = H - Math.max(0, Math.min(H, ((engine.cfg.threshold + 120) / 120) * H));
+  // 閾値の横線（赤=停止境界、橙=再生境界=閾値+ヒステリシス）
+  const yFor = (db) => H - Math.max(0, Math.min(H, ((db + 120) / 120) * H));
   specCtx.strokeStyle = '#ff453a';
-  specCtx.beginPath(); specCtx.moveTo(0, ty); specCtx.lineTo(W, ty); specCtx.stroke();
+  specCtx.beginPath(); specCtx.moveTo(0, yFor(engine.cfg.threshold)); specCtx.lineTo(W, yFor(engine.cfg.threshold)); specCtx.stroke();
+  specCtx.strokeStyle = '#ff9f0a';
+  specCtx.beginPath();
+  const yStart = yFor(engine.cfg.threshold + engine.cfg.hysteresisDb);
+  specCtx.moveTo(0, yStart); specCtx.lineTo(W, yStart); specCtx.stroke();
 }

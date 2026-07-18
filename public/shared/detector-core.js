@@ -4,7 +4,8 @@
 export const DEFAULTS = Object.freeze({
   lowHz: 16000,
   highHz: 18200,
-  threshold: -70,      // dB。キャリブレーション前の暫定値
+  threshold: -70,      // dB。停止判定の下側の境界（キャリブレーション前の暫定値）
+  hysteresisDb: 6,     // ヒステリシス幅。鳴り出すには threshold+この値 が必要。境界付近の点滅を防ぐ
   holdStopMs: 60,      // 停止判定の保持時間（デバウンス）
   holdStartMs: 30,     // 再開判定の保持時間
 });
@@ -60,22 +61,15 @@ export class DetectorEngine {
     this.measureLevel();
     let changed = false;
 
-    if (this.level >= this.cfg.threshold) {
-      // 閾値超え（音あり）
-      this._silenceStart = null;
-      if (!this.playing) {
-        if (this._loudStart === null) this._loudStart = now;
-        if (now - this._loudStart >= this.cfg.holdStartMs) {
-          this.playing = true;
-          changed = true;
-        }
-      } else {
-        this._loudStart = null;
-      }
-    } else {
-      // 閾値割れ（無音）
+    // ヒステリシス：鳴り出すのは高い閾値、止めるのは低い閾値。
+    // 間のデッドバンドでは状態を変えず、境界付近の点滅を防ぐ。
+    const startTh = this.cfg.threshold + this.cfg.hysteresisDb;
+    const stopTh = this.cfg.threshold;
+
+    if (this.playing) {
+      // 再生中：stopTh を下回る状態が holdStopMs 続いたら停止
       this._loudStart = null;
-      if (this.playing) {
+      if (this.level < stopTh) {
         if (this._silenceStart === null) this._silenceStart = now;
         if (now - this._silenceStart >= this.cfg.holdStopMs) {
           this.playing = false;
@@ -83,6 +77,18 @@ export class DetectorEngine {
         }
       } else {
         this._silenceStart = null;
+      }
+    } else {
+      // 停止中：startTh 以上が holdStartMs 続いたら再生
+      this._silenceStart = null;
+      if (this.level >= startTh) {
+        if (this._loudStart === null) this._loudStart = now;
+        if (now - this._loudStart >= this.cfg.holdStartMs) {
+          this.playing = true;
+          changed = true;
+        }
+      } else {
+        this._loudStart = null;
       }
     }
     return changed;

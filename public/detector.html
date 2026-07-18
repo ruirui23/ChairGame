@@ -22,17 +22,46 @@
           <div class="meter"><div id="levelBar"></div></div>
         </div>
       </div>
-      <div class="hint">閾値を下回る状態が保持時間続くと「停止」。頭の無音は無視されます。</div>
+      <div class="row">
+        <span class="readout">入力ピーク: <span id="peak">—</span></span>
+        <span id="clipWarn" class="state-badge stopped" style="display:none">⚠️ 入力クリップ（歪みで誤検知の原因）</span>
+      </div>
+      <div class="hint">閾値を下回る状態が保持時間続くと「停止」。頭の無音は無視されます。声で反応する場合は入力ピークを確認（クリップしていたらマイクを音源から離す）。</div>
     </div>
 
     <div class="panel">
-      <div class="row"><label>監視帯域 下限 (Hz)</label><input type="number" id="lowHz" value="16000" step="100"></div>
+      <div class="row"><label>監視帯域 下限 (Hz)</label><input type="number" id="lowHz" value="16000" step="100">
+        <button class="secondary" id="presetStd">標準 16k</button>
+        <button class="secondary" id="presetVoice">声除外 17k</button></div>
       <div class="row"><label>監視帯域 上限 (Hz)</label><input type="number" id="highHz" value="18200" step="100"></div>
       <div class="row"><label>閾値 (dB)</label><input type="number" id="threshold" value="-70" step="1">
         <button class="secondary" id="setFromNow">現在値−25dBに設定</button></div>
+      <div class="row"><label>ヒステリシス (dB)</label><input type="number" id="hysteresis" value="6" step="1">
+        <span class="hint">点滅防止。鳴り出すには 閾値+この値 が必要</span></div>
       <div class="row"><label>停止保持 (ms)</label><input type="number" id="holdStop" value="60" step="10"></div>
       <div class="row"><label>再開保持 (ms)</label><input type="number" id="holdStart" value="30" step="10"></div>
       <div class="hint">設定は自動保存されます。当日の会場で「現在値−25dBに設定」を音源再生中に押すと手早く合わせられます。</div>
+    </div>
+
+    <div class="panel">
+      <div class="row"><strong>雑音対策キャリブレーション</strong></div>
+      <div class="row">
+        <button class="secondary" id="calNoise">① 環境ノイズ測定（3秒）</button>
+        <span class="hint" id="noiseOut">ノイズフロア: —</span>
+      </div>
+      <div class="row">
+        <button class="secondary" id="calMusic">② 音源測定（5秒）</button>
+        <span class="hint" id="musicOut">音源レベル: —</span>
+      </div>
+      <div class="row">
+        <button id="calApply" disabled>③ 閾値を自動設定</button>
+        <span class="hint" id="calStatus"></span>
+      </div>
+      <div class="row"><label>ノイズ上マージン (dB)</label><input type="number" id="noiseMargin" value="8" step="1"></div>
+      <div class="hint">
+        手順：音を止めて①→ 運営に鳴らしてもらい②→③。ノイズフロアより十分上、かつ音源レベルより下に閾値を自動配置します。
+        16-18.2kHz 帯域外の雑音（話し声・足音・拍手）は元々除外されます。対象はこの帯域に入る定常ノイズ（ヒス等）です。
+      </div>
     </div>
 
     <div class="panel">
