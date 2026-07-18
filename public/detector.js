@@ -11,6 +11,8 @@ const ui = {
   hysteresis: el('hysteresis'),
   holdStop: el('holdStop'), holdStart: el('holdStart'),
   setFromNow: el('setFromNow'), spectrum: el('spectrum'), recvUrl: el('recvUrl'),
+  peak: el('peak'), clipWarn: el('clipWarn'),
+  presetStd: el('presetStd'), presetVoice: el('presetVoice'),
   calNoise: el('calNoise'), calMusic: el('calMusic'), calApply: el('calApply'),
   calStatus: el('calStatus'), noiseOut: el('noiseOut'), musicOut: el('musicOut'),
   noiseMargin: el('noiseMargin'),
@@ -99,6 +101,10 @@ ui.startBtn.addEventListener('click', async () => {
   }
 });
 
+// 帯域プリセット
+ui.presetStd.addEventListener('click', () => { ui.lowHz.value = 16000; applyCfg(); });
+ui.presetVoice.addEventListener('click', () => { ui.lowHz.value = 17000; applyCfg(); });
+
 ui.setFromNow.addEventListener('click', () => {
   if (!engine) return;
   const lv = engine.measureLevel();
@@ -175,6 +181,7 @@ ui.calApply.addEventListener('click', () => {
 
 // --- メインループ ---
 const specCtx = ui.spectrum.getContext('2d');
+let timeBuf = null;
 function loop(now) {
   const changed = engine.tick(now);
   if (changed) broadcastState();
@@ -187,6 +194,15 @@ function loop(now) {
   ui.levelBar.style.width = pct + '%';
   ui.state.className = 'state-badge ' + (engine.playing ? 'playing' : 'stopped');
   ui.state.textContent = engine.playing ? '鳴っている' : '停止';
+
+  // 入力ピーク／クリップ検知（時間波形の絶対最大値）
+  if (!timeBuf) timeBuf = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(timeBuf);
+  let peak = 0;
+  for (let i = 0; i < timeBuf.length; i++) { const a = Math.abs(timeBuf[i]); if (a > peak) peak = a; }
+  const peakDb = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+  ui.peak.textContent = Number.isFinite(peakDb) ? `${peakDb.toFixed(1)} dBFS` : '−∞';
+  ui.clipWarn.style.display = peak >= 0.985 ? 'inline-block' : 'none';
 
   drawSpectrum();
   requestAnimationFrame(loop);
