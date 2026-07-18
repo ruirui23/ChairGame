@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>検知 — 高周波椅子取り</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="detector">
+    <h1>🎧 検知ページ（Mac・自分用）</h1>
+
+    <div class="panel">
+      <div class="row">
+        <button id="startBtn">マイク開始</button>
+        <span id="state" class="state-badge stopped">待機中</span>
+        <span id="clients" class="hint"></span>
+      </div>
+      <div class="row">
+        <div class="readout">
+          帯域レベル: <span class="big" id="level">—</span> dB
+          <div class="meter"><div id="levelBar"></div></div>
+        </div>
+      </div>
+      <div class="hint">閾値を下回る状態が保持時間続くと「停止」。頭の無音は無視されます。</div>
+    </div>
+
+    <div class="panel">
+      <div class="row"><label>監視帯域 下限 (Hz)</label><input type="number" id="lowHz" value="16000" step="100"></div>
+      <div class="row"><label>監視帯域 上限 (Hz)</label><input type="number" id="highHz" value="18200" step="100"></div>
+      <div class="row"><label>閾値 (dB)</label><input type="number" id="threshold" value="-70" step="1">
+        <button class="secondary" id="setFromNow">現在値−25dBに設定</button></div>
+      <div class="row"><label>停止保持 (ms)</label><input type="number" id="holdStop" value="60" step="10"></div>
+      <div class="row"><label>再開保持 (ms)</label><input type="number" id="holdStart" value="30" step="10"></div>
+      <div class="hint">設定は自動保存されます。当日の会場で「現在値−25dBに設定」を音源再生中に押すと手早く合わせられます。</div>
+    </div>
+
+    <div class="panel">
+      <div class="hint">スペクトラム（10〜20kHz）。緑の縦線が監視帯域。</div>
+      <canvas id="spectrum" width="700" height="140"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="hint">受信ページ URL（iPhone をこの Mac のテザLANに繋いで開く）</div>
+      <div class="row"><code id="recvUrl">—</code></div>
+    </div>
+  </div>
+
+  <script type="module" src="/detector.js"></script>
+</body>
+</html>

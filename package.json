@@ -1,0 +1,16 @@
+{
+  "name": "chairgame-detector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "High-frequency musical-chairs detector: measures 16-18.2kHz band energy and broadcasts play/stop state over LAN.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.21.1"
+  }
+}

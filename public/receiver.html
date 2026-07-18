@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>受信 — 高周波椅子取り</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="receiver-body">
+  <div id="warning">⚠️ サーバー未接続</div>
+
+  <div class="controls">
+    <button id="toggleScreen">画面ON</button>
+    <button id="toggleSound">音ON</button>
+    <button id="toggleInvert">明暗反転</button>
+    <button id="toggleDebug">debug</button>
+  </div>
+
+  <div id="signal"></div>
+
+  <div id="debug" style="display:none">
+    <span id="dbgState">—</span>
+    <span id="dbgLevel">—</span>
+  </div>
+
+  <div id="startOverlay">
+    <div>🪑 高周波椅子取り 受信</div>
+    <div style="font-size:16px">タップして開始<br>（音声のアンロック・スリープ防止）</div>
+  </div>
+
+  <script type="module" src="/receiver.js"></script>
+</body>
+</html>

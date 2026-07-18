@@ -1,0 +1,65 @@
+:root {
+  color-scheme: dark;
+  --bg: #111;
+  --panel: #1c1c1e;
+  --fg: #eee;
+  --muted: #888;
+  --accent: #0a84ff;
+  --ok: #30d158;
+  --warn: #ff453a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ===== 検知ページ ===== */
+.detector { padding: 16px; max-width: 720px; margin: 0 auto; }
+h1 { font-size: 18px; margin: 0 0 12px; }
+.panel { background: var(--panel); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+.row label { min-width: 120px; color: var(--muted); font-size: 13px; }
+input[type="number"] { width: 90px; background: #000; color: var(--fg); border: 1px solid #333; border-radius: 6px; padding: 6px; }
+button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+button.secondary { background: #333; }
+button:disabled { opacity: 0.4; cursor: default; }
+
+.state-badge { display: inline-block; padding: 8px 18px; border-radius: 999px; font-weight: 700; font-size: 20px; }
+.state-badge.playing { background: var(--ok); color: #000; }
+.state-badge.stopped { background: var(--warn); color: #fff; }
+
+.readout { font-variant-numeric: tabular-nums; font-size: 15px; }
+.readout .big { font-size: 28px; font-weight: 700; }
+.meter { height: 10px; background: #000; border-radius: 5px; overflow: hidden; margin-top: 6px; }
+.meter > div { height: 100%; background: var(--accent); width: 0%; }
+canvas { width: 100%; height: 140px; background: #000; border-radius: 8px; display: block; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.qr { background: #fff; padding: 8px; border-radius: 8px; display: inline-block; }
+
+/* ===== 受信ページ ===== */
+.receiver-body { overflow: hidden; height: 100vh; }
+#signal {
+  position: fixed; inset: 0; background: #000;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none; user-select: none;
+}
+#startOverlay {
+  position: fixed; inset: 0; background: #000; color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 24px; gap: 12px; z-index: 30; text-align: center; padding: 24px;
+}
+#warning {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+  background: var(--warn); color: #fff; text-align: center;
+  padding: 10px; font-weight: 700; display: none;
+}
+#debug {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  background: rgba(0,0,0,0.6); color: #0f0; font-family: monospace;
+  font-size: 12px; padding: 6px 10px; display: flex; justify-content: space-between;
+}
+.controls { position: fixed; top: 8px; right: 8px; z-index: 25; display: flex; gap: 6px; }
+.controls button { background: rgba(60,60,60,0.7); padding: 6px 10px; font-size: 12px; }

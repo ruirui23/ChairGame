@@ -1,0 +1,149 @@
+import { DetectorEngine, DEFAULTS } from '/shared/detector-core.js';
+
+const FFT_SIZE = 4096;
+const STORAGE_KEY = 'chairgame.detector.cfg';
+
+const el = (id) => document.getElementById(id);
+const ui = {
+  startBtn: el('startBtn'), state: el('state'), clients: el('clients'),
+  level: el('level'), levelBar: el('levelBar'),
+  lowHz: el('lowHz'), highHz: el('highHz'), threshold: el('threshold'),
+  holdStop: el('holdStop'), holdStart: el('holdStart'),
+  setFromNow: el('setFromNow'), spectrum: el('spectrum'), recvUrl: el('recvUrl'),
+};
+
+let engine = null;
+let audioCtx = null;
+let analyser = null;
+let ws = null;
+
+// 受信 URL 表示（現在ホスト名を利用）
+ui.recvUrl.textContent = `http://${location.host}/receiver.html`;
+
+// --- 設定の保存/復元 ---
+function loadCfg() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (saved.lowHz != null) ui.lowHz.value = saved.lowHz;
+    if (saved.highHz != null) ui.highHz.value = saved.highHz;
+    if (saved.threshold != null) ui.threshold.value = saved.threshold;
+    if (saved.holdStopMs != null) ui.holdStop.value = saved.holdStopMs;
+    if (saved.holdStartMs != null) ui.holdStart.value = saved.holdStartMs;
+  } catch { /* ignore */ }
+}
+function currentCfg() {
+  return {
+    lowHz: +ui.lowHz.value, highHz: +ui.highHz.value,
+    threshold: +ui.threshold.value,
+    holdStopMs: +ui.holdStop.value, holdStartMs: +ui.holdStart.value,
+  };
+}
+function saveCfg() { localStorage.setItem(STORAGE_KEY, JSON.stringify(currentCfg())); }
+
+function applyCfg() {
+  if (engine) engine.setConfig(currentCfg());
+  saveCfg();
+}
+for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.holdStop, ui.holdStart]) {
+  inp.addEventListener('change', applyCfg);
+}
+loadCfg();
+
+// --- WebSocket ---
+function connectWs() {
+  ws = new WebSocket(`ws://${location.host}`);
+  ws.addEventListener('message', (ev) => {
+    try {
+      const m = JSON.parse(ev.data);
+      if (m.clients != null) ui.clients.textContent = `接続 ${m.clients} 台`;
+    } catch { /* ignore */ }
+  });
+  ws.addEventListener('close', () => setTimeout(connectWs, 1000));
+}
+function broadcastState() {
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({
+      type: 'state', playing: engine.playing,
+      level: Number.isFinite(engine.level) ? +engine.level.toFixed(1) : -999,
+      threshold: engine.cfg.threshold, timestamp: Date.now(),
+    }));
+  }
+}
+
+// --- マイク開始 ---
+ui.startBtn.addEventListener('click', async () => {
+  if (audioCtx) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    audioCtx = new AudioContext();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = FFT_SIZE;
+    analyser.smoothingTimeConstant = 0;
+    src.connect(analyser);
+
+    engine = new DetectorEngine(analyser, audioCtx.sampleRate, currentCfg());
+    connectWs();
+    ui.startBtn.disabled = true;
+    ui.startBtn.textContent = '検知中';
+    requestAnimationFrame(loop);
+  } catch (e) {
+    alert('マイクを開始できません: ' + e.message);
+  }
+});
+
+ui.setFromNow.addEventListener('click', () => {
+  if (!engine) return;
+  const lv = engine.measureLevel();
+  if (Number.isFinite(lv)) {
+    ui.threshold.value = Math.round(lv - 25);
+    applyCfg();
+  }
+});
+
+// --- メインループ ---
+const specCtx = ui.spectrum.getContext('2d');
+function loop(now) {
+  const changed = engine.tick(now);
+  if (changed) broadcastState();
+
+  // 表示更新
+  const lv = engine.level;
+  ui.level.textContent = Number.isFinite(lv) ? lv.toFixed(1) : '−∞';
+  const pct = Math.max(0, Math.min(100, ((lv + 120) / 120) * 100));
+  ui.levelBar.style.width = pct + '%';
+  ui.state.className = 'state-badge ' + (engine.playing ? 'playing' : 'stopped');
+  ui.state.textContent = engine.playing ? '鳴っている' : '停止';
+
+  drawSpectrum();
+  requestAnimationFrame(loop);
+}
+
+function drawSpectrum() {
+  const W = ui.spectrum.width, H = ui.spectrum.height;
+  specCtx.clearRect(0, 0, W, H);
+  const buf = engine.buffer; // tick() 内で取得済み
+  const binWidth = engine.binWidth;
+  const fromHz = 10000, toHz = 20000;
+  const fromBin = Math.floor(fromHz / binWidth), toBin = Math.ceil(toHz / binWidth);
+
+  specCtx.fillStyle = '#0a84ff';
+  for (let i = fromBin; i <= toBin; i++) {
+    const x = ((i - fromBin) / (toBin - fromBin)) * W;
+    const db = buf[i];
+    const h = Math.max(0, Math.min(H, ((db + 120) / 120) * H));
+    specCtx.fillRect(x, H - h, Math.max(1, W / (toBin - fromBin)), h);
+  }
+  // 監視帯域の縦線
+  specCtx.strokeStyle = '#30d158';
+  for (const hz of [engine.cfg.lowHz, engine.cfg.highHz]) {
+    const x = ((hz / binWidth - fromBin) / (toBin - fromBin)) * W;
+    specCtx.beginPath(); specCtx.moveTo(x, 0); specCtx.lineTo(x, H); specCtx.stroke();
+  }
+  // 閾値の横線
+  const ty = H - Math.max(0, Math.min(H, ((engine.cfg.threshold + 120) / 120) * H));
+  specCtx.strokeStyle = '#ff453a';
+  specCtx.beginPath(); specCtx.moveTo(0, ty); specCtx.lineTo(W, ty); specCtx.stroke();
+}
