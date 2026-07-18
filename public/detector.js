@@ -10,6 +10,9 @@ const ui = {
   lowHz: el('lowHz'), highHz: el('highHz'), threshold: el('threshold'),
   holdStop: el('holdStop'), holdStart: el('holdStart'),
   setFromNow: el('setFromNow'), spectrum: el('spectrum'), recvUrl: el('recvUrl'),
+  calNoise: el('calNoise'), calMusic: el('calMusic'), calApply: el('calApply'),
+  calStatus: el('calStatus'), noiseOut: el('noiseOut'), musicOut: el('musicOut'),
+  noiseMargin: el('noiseMargin'),
 };
 
 let engine = null;
@@ -103,11 +106,77 @@ ui.setFromNow.addEventListener('click', () => {
   }
 });
 
+// --- キャリブレーション（雑音対策）---
+const CAL_KEY = 'chairgame.detector.cal';
+const cal = { noiseFloor: null, musicLevel: null, ...JSON.parse(localStorage.getItem(CAL_KEY) || '{}') };
+let collecting = null; // { samples: [], done: (arr)=>void }
+
+function renderCal() {
+  ui.noiseOut.textContent = 'ノイズフロア: ' + (cal.noiseFloor != null ? cal.noiseFloor.toFixed(1) + ' dB' : '—');
+  ui.musicOut.textContent = '音源レベル: ' + (cal.musicLevel != null ? cal.musicLevel.toFixed(1) + ' dB' : '—');
+  ui.calApply.disabled = !(cal.noiseFloor != null && cal.musicLevel != null);
+}
+renderCal();
+
+function percentile(arr, p) {
+  const s = arr.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!s.length) return null;
+  return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))];
+}
+
+function collect(ms, done) {
+  if (!engine) { alert('先に「マイク開始」を押してください'); return; }
+  collecting = { samples: [], done };
+  const btns = [ui.calNoise, ui.calMusic];
+  btns.forEach((b) => (b.disabled = true));
+  const t0 = performance.now();
+  ui.calStatus.textContent = '測定中…';
+  const timer = setInterval(() => {
+    const remain = Math.max(0, ms - (performance.now() - t0));
+    ui.calStatus.textContent = `測定中… ${(remain / 1000).toFixed(1)}s`;
+    if (remain <= 0) {
+      clearInterval(timer);
+      const samples = collecting.samples;
+      collecting = null;
+      btns.forEach((b) => (b.disabled = false));
+      ui.calStatus.textContent = '';
+      done(samples);
+    }
+  }, 100);
+}
+
+ui.calNoise.addEventListener('click', () => collect(3000, (s) => {
+  cal.noiseFloor = percentile(s, 95); // 定常ノイズがたまに達する上端
+  localStorage.setItem(CAL_KEY, JSON.stringify(cal));
+  renderCal();
+}));
+ui.calMusic.addEventListener('click', () => collect(5000, (s) => {
+  cal.musicLevel = percentile(s, 50); // 音源レベルの中央値
+  localStorage.setItem(CAL_KEY, JSON.stringify(cal));
+  renderCal();
+}));
+ui.calApply.addEventListener('click', () => {
+  if (cal.noiseFloor == null || cal.musicLevel == null) return;
+  const margin = +ui.noiseMargin.value || 8;
+  const floorGuard = cal.noiseFloor + margin;   // ノイズより十分上
+  const musicGuard = cal.musicLevel - 3;        // 音源より少し下
+  let th = cal.musicLevel - 25;                 // 基本は音源中央値−25dB
+  th = Math.min(Math.max(th, floorGuard), musicGuard);
+  ui.threshold.value = Math.round(th);
+  applyCfg();
+  if (floorGuard >= musicGuard) {
+    ui.calStatus.textContent = '⚠️ ノイズと音源の差が小さく誤検知の恐れ（音量↑や設置見直しを）';
+  } else {
+    ui.calStatus.textContent = `✓ 閾値 ${Math.round(th)}dB（SNR 約 ${(cal.musicLevel - cal.noiseFloor).toFixed(0)}dB）`;
+  }
+});
+
 // --- メインループ ---
 const specCtx = ui.spectrum.getContext('2d');
 function loop(now) {
   const changed = engine.tick(now);
   if (changed) broadcastState();
+  if (collecting) collecting.samples.push(engine.level);
 
   // 表示更新
   const lv = engine.level;

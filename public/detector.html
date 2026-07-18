@@ -36,6 +36,27 @@
     </div>
 
     <div class="panel">
+      <div class="row"><strong>雑音対策キャリブレーション</strong></div>
+      <div class="row">
+        <button class="secondary" id="calNoise">① 環境ノイズ測定（3秒）</button>
+        <span class="hint" id="noiseOut">ノイズフロア: —</span>
+      </div>
+      <div class="row">
+        <button class="secondary" id="calMusic">② 音源測定（5秒）</button>
+        <span class="hint" id="musicOut">音源レベル: —</span>
+      </div>
+      <div class="row">
+        <button id="calApply" disabled>③ 閾値を自動設定</button>
+        <span class="hint" id="calStatus"></span>
+      </div>
+      <div class="row"><label>ノイズ上マージン (dB)</label><input type="number" id="noiseMargin" value="8" step="1"></div>
+      <div class="hint">
+        手順：音を止めて①→ 運営に鳴らしてもらい②→③。ノイズフロアより十分上、かつ音源レベルより下に閾値を自動配置します。
+        16-18.2kHz 帯域外の雑音（話し声・足音・拍手）は元々除外されます。対象はこの帯域に入る定常ノイズ（ヒス等）です。
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="hint">スペクトラム（10〜20kHz）。緑の縦線が監視帯域。</div>
       <canvas id="spectrum" width="700" height="140"></canvas>
     </div>
