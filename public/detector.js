@@ -1,6 +1,6 @@
 import { DetectorEngine, DEFAULTS } from '/shared/detector-core.js';
 
-const FFT_SIZE = 4096;
+const FFT_SIZE = 2048;  // 窓43ms(48kHz)。分解能23Hzで帯域には十分、反応を速くするため4096から短縮
 const STORAGE_KEY = 'chairgame.detector.cfg';
 
 const el = (id) => document.getElementById(id);
@@ -8,6 +8,7 @@ const ui = {
   startBtn: el('startBtn'), state: el('state'), clients: el('clients'),
   level: el('level'), levelBar: el('levelBar'),
   lowHz: el('lowHz'), highHz: el('highHz'), threshold: el('threshold'),
+  hysteresis: el('hysteresis'),
   holdStop: el('holdStop'), holdStart: el('holdStart'),
   setFromNow: el('setFromNow'), spectrum: el('spectrum'), recvUrl: el('recvUrl'),
   calNoise: el('calNoise'), calMusic: el('calMusic'), calApply: el('calApply'),
@@ -30,6 +31,7 @@ function loadCfg() {
     if (saved.lowHz != null) ui.lowHz.value = saved.lowHz;
     if (saved.highHz != null) ui.highHz.value = saved.highHz;
     if (saved.threshold != null) ui.threshold.value = saved.threshold;
+    if (saved.hysteresisDb != null) ui.hysteresis.value = saved.hysteresisDb;
     if (saved.holdStopMs != null) ui.holdStop.value = saved.holdStopMs;
     if (saved.holdStartMs != null) ui.holdStart.value = saved.holdStartMs;
   } catch { /* ignore */ }
@@ -37,7 +39,7 @@ function loadCfg() {
 function currentCfg() {
   return {
     lowHz: +ui.lowHz.value, highHz: +ui.highHz.value,
-    threshold: +ui.threshold.value,
+    threshold: +ui.threshold.value, hysteresisDb: +ui.hysteresis.value,
     holdStopMs: +ui.holdStop.value, holdStartMs: +ui.holdStart.value,
   };
 }
@@ -47,7 +49,7 @@ function applyCfg() {
   if (engine) engine.setConfig(currentCfg());
   saveCfg();
 }
-for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.holdStop, ui.holdStart]) {
+for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.hysteresis, ui.holdStop, ui.holdStart]) {
   inp.addEventListener('change', applyCfg);
 }
 loadCfg();
@@ -211,8 +213,12 @@ function drawSpectrum() {
     const x = ((hz / binWidth - fromBin) / (toBin - fromBin)) * W;
     specCtx.beginPath(); specCtx.moveTo(x, 0); specCtx.lineTo(x, H); specCtx.stroke();
   }
-  // 閾値の横線
-  const ty = H - Math.max(0, Math.min(H, ((engine.cfg.threshold + 120) / 120) * H));
+  // 閾値の横線（赤=停止境界、橙=再生境界=閾値+ヒステリシス）
+  const yFor = (db) => H - Math.max(0, Math.min(H, ((db + 120) / 120) * H));
   specCtx.strokeStyle = '#ff453a';
-  specCtx.beginPath(); specCtx.moveTo(0, ty); specCtx.lineTo(W, ty); specCtx.stroke();
+  specCtx.beginPath(); specCtx.moveTo(0, yFor(engine.cfg.threshold)); specCtx.lineTo(W, yFor(engine.cfg.threshold)); specCtx.stroke();
+  specCtx.strokeStyle = '#ff9f0a';
+  specCtx.beginPath();
+  const yStart = yFor(engine.cfg.threshold + engine.cfg.hysteresisDb);
+  specCtx.moveTo(0, yStart); specCtx.lineTo(W, yStart); specCtx.stroke();
 }
