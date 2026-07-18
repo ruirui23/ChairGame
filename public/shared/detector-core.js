@@ -3,7 +3,7 @@
 
 export const DEFAULTS = Object.freeze({
   lowHz: 16000,
-  highHz: 18200,
+  highHz: 18500,
   threshold: -70,      // dB。停止判定の下側の境界（キャリブレーション前の暫定値）
   hysteresisDb: 6,     // ヒステリシス幅。鳴り出すには threshold+この値 が必要。境界付近の点滅を防ぐ
   holdStopMs: 60,      // 停止判定の保持時間（デバウンス）

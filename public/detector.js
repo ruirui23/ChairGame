@@ -12,7 +12,7 @@ const ui = {
   holdStop: el('holdStop'), holdStart: el('holdStart'),
   setFromNow: el('setFromNow'), spectrum: el('spectrum'), recvUrl: el('recvUrl'),
   peak: el('peak'), clipWarn: el('clipWarn'),
-  presetStd: el('presetStd'), presetVoice: el('presetVoice'),
+  presetStd: el('presetStd'), presetVoice: el('presetVoice'), presetFar: el('presetFar'),
   calNoise: el('calNoise'), calMusic: el('calMusic'), calApply: el('calApply'),
   calStatus: el('calStatus'), noiseOut: el('noiseOut'), musicOut: el('musicOut'),
   noiseMargin: el('noiseMargin'),
@@ -103,9 +103,11 @@ ui.startBtn.addEventListener('click', async () => {
   }
 });
 
-// 帯域プリセット
-ui.presetStd.addEventListener('click', () => { ui.lowHz.value = 16000; applyCfg(); });
-ui.presetVoice.addEventListener('click', () => { ui.lowHz.value = 17000; applyCfg(); });
+// 帯域プリセット（下限・上限をまとめて設定）
+function setBand(low, high) { ui.lowHz.value = low; ui.highHz.value = high; applyCfg(); }
+ui.presetStd.addEventListener('click', () => setBand(16000, 18500));   // 標準
+ui.presetVoice.addEventListener('click', () => setBand(17000, 18500)); // 声除外
+ui.presetFar.addEventListener('click', () => setBand(16000, 17500));   // 遠距離：最もよく届く帯域に絞る
 
 ui.setFromNow.addEventListener('click', () => {
   if (!engine) return;
