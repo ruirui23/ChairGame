@@ -8,7 +8,7 @@ const ui = {
   startBtn: el('startBtn'), state: el('state'), clients: el('clients'),
   level: el('level'), levelBar: el('levelBar'),
   lowHz: el('lowHz'), highHz: el('highHz'), threshold: el('threshold'),
-  hysteresis: el('hysteresis'),
+  hysteresis: el('hysteresis'), smooth: el('smooth'),
   holdStop: el('holdStop'), holdStart: el('holdStart'),
   setFromNow: el('setFromNow'), spectrum: el('spectrum'), recvUrl: el('recvUrl'),
   peak: el('peak'), clipWarn: el('clipWarn'),
@@ -34,6 +34,7 @@ function loadCfg() {
     if (saved.highHz != null) ui.highHz.value = saved.highHz;
     if (saved.threshold != null) ui.threshold.value = saved.threshold;
     if (saved.hysteresisDb != null) ui.hysteresis.value = saved.hysteresisDb;
+    if (saved.smoothMs != null) ui.smooth.value = saved.smoothMs;
     if (saved.holdStopMs != null) ui.holdStop.value = saved.holdStopMs;
     if (saved.holdStartMs != null) ui.holdStart.value = saved.holdStartMs;
   } catch { /* ignore */ }
@@ -42,6 +43,7 @@ function currentCfg() {
   return {
     lowHz: +ui.lowHz.value, highHz: +ui.highHz.value,
     threshold: +ui.threshold.value, hysteresisDb: +ui.hysteresis.value,
+    smoothMs: +ui.smooth.value,
     holdStopMs: +ui.holdStop.value, holdStartMs: +ui.holdStart.value,
   };
 }
@@ -51,7 +53,7 @@ function applyCfg() {
   if (engine) engine.setConfig(currentCfg());
   saveCfg();
 }
-for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.hysteresis, ui.holdStop, ui.holdStart]) {
+for (const inp of [ui.lowHz, ui.highHz, ui.threshold, ui.hysteresis, ui.smooth, ui.holdStop, ui.holdStart]) {
   inp.addEventListener('change', applyCfg);
 }
 loadCfg();
